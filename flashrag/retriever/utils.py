@@ -8,6 +8,7 @@ import re
 import langid
 from transformers import AutoTokenizer, AutoModel, AutoConfig
 from flashrag.utils import get_device
+import torch
 
 _has_printed_instruction = False  # trigger instruction print once
 
@@ -78,6 +79,15 @@ def pooling(pooler_output, last_hidden_state, attention_mask=None, pooling_metho
         return last_hidden_state[:, 0]
     elif pooling_method == "pooler":
         return pooler_output
+    elif pooling_method == "lasttoken":
+        # For left padding, take the last token; for right padding, take the actual last token
+        left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
+        if left_padding:
+            return last_hidden_state[:, -1]
+        else:
+            sequence_lengths = attention_mask.sum(dim=1) - 1
+            batch_size = last_hidden_state.shape[0]
+            return last_hidden_state[torch.arange(batch_size, device=last_hidden_state.device), sequence_lengths]
     else:
         raise NotImplementedError("Pooling method not implemented!")
 
@@ -96,6 +106,14 @@ def set_default_instruction(model_name, is_query=True, is_zh=False):
                 instruction = "为这个句子生成表示以用于检索相关文章："
             else:
                 instruction = "Represent this sentence for searching relevant passages: "
+
+    if "qwen3" in model_name.lower():
+        if is_query:
+            instruction = "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
+
+    if "diver" in model_name.lower():
+        if is_query:
+            instruction = "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
 
     return instruction
 

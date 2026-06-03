@@ -419,6 +419,8 @@ class DenseRetriever(BaseTextRetriever):
                         detect_pooling_method = "mean"
                     elif detect_pooling_method == "cls_token":
                         detect_pooling_method = "cls"
+                    elif detect_pooling_method == "lasttoken":
+                        detect_pooling_method = "lasttoken"
                     else:
                         # raise warning: not implemented pooling method
                         warnings.warn(f"Pooling method {detect_pooling_method} is not implemented.", UserWarning)

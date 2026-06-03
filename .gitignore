@@ -1,17 +1,39 @@
+# ============================================================================
+# Large external data — keep only the directory placeholder (.gitkeep)
+# These hold corpora, FAISS indexes, model weights and run outputs that are
+# downloaded/generated locally and must NOT be committed (GitHub 100MB limit).
+# ============================================================================
 datasets/*
 indexes/*
 models/*
 results/*
 tests/*
 webui_configs/*
-
 !.gitkeep
 
+# ============================================================================
+# Experiment intermediate dumps
+# `run_exp.py` writes one `intermediate_data.json` per experiment containing the
+# retrieved documents, built prompts and raw generations for every sample.
+# These are large (often >1GB each; ~31GB total here) and fully regenerable.
+# We KEEP the small `config.yaml` + `metric_score.txt` next to them so the
+# experiment setup and final metrics survive. See MIGRATION_NOTES.md.
+# ============================================================================
+**/intermediate_data.json
+
+# ============================================================================
+# Run logs (stdout dumps from run_exp.py — regenerable noise)
+# ============================================================================
+*.log
+
+# ============================================================================
+# Python / build artifacts
+# ============================================================================
 **/.history
 *.pyc
+__pycache__/
 *.egg-info
 build/
-.idea/
 dist/*
+.idea/
 upload_pypi.sh
-=0.4.1

@@ -21,10 +21,12 @@ class PromptTemplate:
             model_config = AutoConfig.from_pretrained(self.generator_path, trust_remote_code=True)
             model_name = model_config._name_or_path.lower()
             self.is_chat = False
-            if "chat" in model_name or "instruct" in model_name or config['is_reasoning']:
+            self.is_qwen3 = "qwen3" in model_name
+            if "chat" in model_name or "instruct" in model_name or "qwen3" in model_name or config['is_reasoning']:
                 self.is_chat = True
         else:
             self.is_chat = True
+            self.is_qwen3 = False
             self.enable_chat = True
 
         if len(system_prompt) == 0 and len(user_prompt) == 0:
@@ -115,9 +117,13 @@ class PromptTemplate:
                 if self.is_openai:
                     return self.truncate_prompt(messages)
                 else:
-                    prompt = self._get_tokenizer().apply_chat_template(
-                        messages, tokenize=False, add_generation_prompt=True
-                    )
+                    chat_template_kwargs = {
+                        "tokenize": False,
+                        "add_generation_prompt": True,
+                    }
+                    if self.is_qwen3:
+                        chat_template_kwargs["enable_thinking"] = False
+                    prompt = self._get_tokenizer().apply_chat_template(messages, **chat_template_kwargs)
                     return self.truncate_prompt(prompt)
             else:
                 prompt = "\n\n".join(
@@ -145,7 +151,13 @@ class PromptTemplate:
                 input.append({"role": "user", "content": user_prompt})
             if not self.is_openai:
                 try:
-                    input = self._get_tokenizer().apply_chat_template(input, tokenize=False, add_generation_prompt=True)
+                    chat_template_kwargs = {
+                        "tokenize": False,
+                        "add_generation_prompt": True,
+                    }
+                    if self.is_qwen3:
+                        chat_template_kwargs["enable_thinking"] = False
+                    input = self._get_tokenizer().apply_chat_template(input, **chat_template_kwargs)
                 except:
                     print("Warning: the generator tokenizer not support `apply_chat_template`")
                     input = system_prompt + '\n\n' + user_prompt

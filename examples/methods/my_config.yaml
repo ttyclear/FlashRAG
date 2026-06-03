@@ -1,37 +1,59 @@
 # ------------------------------------------------Global Paths------------------------------------------------#
 # Paths to models
 model2path:
-  e5: "intfloat/e5-base-v2"
-  bge: "BAAI/bge-base-en-v1.5"
+  e5: "/public/huggingface-models/intfloat/e5-base-v2"
+  e5-large: "/data/tyc/models/e5-large-v2"
+  bge: "/data/tyc/models/bge-base-en-v1.5"
+  bge-large: "/data/tyc/models/bge-large-en-v1.5"
+  bge-m3: "/data/tyc/models/bge-m3"
   contriever: "facebook/contriever"
   llama2-7B-chat: "meta-llama/Llama-2-7b-chat-hf"
   llama2-7B: "meta-llama/Llama-2-7b-hf"
   llama2-13B: "meta-llama/Llama-2-13b-hf"
   llama2-13B-chat: "meta-llama/Llama-2-13b-chat-hf"
-  llama3-8B-instruct: "meta-llama/Meta-Llama-3-8B-Instruct"
-
+  llama3-8B-instruct: "/public/huggingface-models/meta-llama/Meta-Llama-3-8B-Instruct"
+  qwen3-embedding-0.6B: "/public/huggingface-models/Qwen/Qwen3-Embedding-0.6B"
+  qwen3-embedding-4B: "/public/huggingface-models/Qwen/Qwen3-Embedding-4B"
+  diver-retriever-0.6B: "/data/tyc/models/Diver-Retriever-0.6B"
+  qwen3-8B: "/public/huggingface-models/Qwen/Qwen3-8B"
+  
 # Pooling methods for each embedding model
 model2pooling:
   e5: "mean"
+  e5-large: "mean"
   bge: "cls"
+  bge-large: "cls"
+  bge-m3: "cls"
+  # For embedding retrieval, you can employ the BGE-M3 model using the same approach as BGE. \
+  # The only difference is that the BGE-M3 model no longer requires adding instructions to the queries.
   contriever: "mean"
   jina: 'mean'
   dpr: cls
+  qwen3-embedding-0.6B: "lasttoken"
+  qwen3-embedding-4B: "lasttoken"
+  diver-retriever-0.6B: "lasttoken"
 
 # Indexes path for retrieval models
 method2index:
-  e5: ~
-  bm25: ~
+  e5: "/data/tyc/FlashRAG/indexes/e5_Flat.index"
+  e5-large: "/data/tyc/FlashRAG/indexes/e5-large_Flat.index"
+  bm25: "/data/tyc/FlashRAG/indexes/bm25"
   contriever: ~
+  bge: "/data/tyc/FlashRAG/indexes/bge_Flat.index"
+  bge-large: "/data/tyc/FlashRAG/indexes/bge-large_Flat.index"
+  bge-m3: "/data/tyc/FlashRAG/indexes/bge-m3_Flat.index"
+  qwen3-embedding-0.6B: "/data/tyc/FlashRAG/indexes/qwen3-embedding-0.6b_Flat.index"
+  qwen3-embedding-4B: "/data/tyc/FlashRAG/indexes/qwen3-embedding-4b_Flat.index"
+  diver-retriever-0.6B: "/data/tyc/FlashRAG/indexes/diver-retriever-0.6b_Flat.index"
 
 # ------------------------------------------------Environment Settings------------------------------------------------#
 # Directory paths for data and outputs
-data_dir: "dataset/"
-save_dir: "output/"
+data_dir: "/data/tyc/datasets/FlashRAG_datasets/"
+save_dir: "qwen3-8b-output/train/nq"
 
 gpu_id: "0,1,2,3"
 dataset_name: "nq" # name of the dataset in data_dir
-split: [ "test" ]  # dataset split to load (e.g. train,dev,test)
+split: [ "train" ]  # dataset split to load (e.g. train,dev,test. for hotpotQA is dev)
 
 # Sampling configurations for testing
 test_sample_num: ~  # number of samples to test (only work in dev/test split), if None, test all samples
@@ -46,14 +68,12 @@ save_note: 'experiment'
 
 # -------------------------------------------------Retrieval Settings------------------------------------------------#
 # If set the name, the model path will be find in global paths
-retrieval_method: "e5"  # name or path of the retrieval model. 
+retrieval_method: "diver-retriever-0.6B"  # name or path of the retrieval model. 
 index_path: ~ # set automatically if not provided. 
 faiss_gpu: False # whether use gpu to hold index
-corpus_path: ~  # path to corpus in '.jsonl' format that store the documents
-
-instruction: ~ # instruction for retrieval model
+corpus_path: "/data/tyc/datasets/FlashRAG_datasets/retrieval-corpus/wiki18_100w.jsonl"  # path to corpus in '.jsonl' format that store the documentsinstruction: ~ # instruction for retrieval model
 retrieval_topk: 5 # number of retrieved documents
-retrieval_batch_size: 256  # batch size for retrieval
+retrieval_batch_size: 128  # batch size for retrieval
 retrieval_use_fp16: True  # whether to use fp16 for retrieval model
 retrieval_query_max_length: 128  # max length of the query
 save_retrieval_cache: False # whether to save the retrieval cache
@@ -72,13 +92,14 @@ rerank_use_fp16: True
 
 # -------------------------------------------------Generator Settings------------------------------------------------#
 framework: vllm # inference frame work of LLM, supporting: 'hf','vllm','fschat'
-generator_model: "llama3-8B-instruct" # name or path of the generator model
+generator_model: "qwen3-8B" # name or path of the generator model
 generator_max_input_len: 2048  # max length of the input
 generator_batch_size: 2 # batch size for generation, invalid for vllm
 generation_params:
   do_sample: False
   max_tokens: 32
 use_fid: False # whether to use FID, only valid in encoder-decoder model
+gpu_memory_utilization: 0.75 # specify the gpu memory utilization for vllm
 
 
 # -------------------------------------------------Refiner Settings------------------------------------------------#
@@ -113,6 +134,4 @@ metrics: [ 'em','f1','acc','precision','recall']
 metric_setting:
   retrieval_recall_topk: 5
 save_metric_score: True #　whether to save the metric score into txt file
-
-
 

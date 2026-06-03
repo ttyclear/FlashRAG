@@ -35,6 +35,7 @@ class Index_Builder:
             max_length,
             batch_size,
             use_fp16,
+            streaming_build=False,
             n_postings=1000,
             centroid_fraction=0.2,
             min_cluster_size=2,
@@ -60,6 +61,7 @@ class Index_Builder:
         self.max_length = max_length
         self.batch_size = batch_size
         self.use_fp16 = use_fp16
+        self.streaming_build = streaming_build
         self.instruction = instruction
         self.faiss_type = faiss_type if faiss_type is not None else "Flat"
         self.embedding_path = embedding_path
@@ -100,6 +102,8 @@ class Index_Builder:
                             pooling_method = "mean"
                         elif pooling_method == "cls_token":
                             pooling_method = "cls"
+                        elif pooling_method == "lasttoken":
+                            pooling_method = "lasttoken"
                         else:
                             # raise warning: not implemented pooling method
                             warnings.warn(f"Pooling method {pooling_method} is not implemented.", UserWarning)
@@ -110,7 +114,7 @@ class Index_Builder:
                 # use default pooling method
                 pooling_method = "mean"
         else:
-            if pooling_method not in ["mean", "cls", "pooler"]:
+            if pooling_method not in ["mean", "cls", "pooler", "lasttoken"]:
                 raise ValueError(f"Invalid pooling method {pooling_method}.")
         self.pooling_method = pooling_method
 
@@ -552,37 +556,82 @@ class Index_Builder:
         if self.embedding_path is not None:
             corpus_size = len(self.corpus)
             all_embeddings = self._load_embedding(self.embedding_path, corpus_size, hidden_size)
+            stream_mode = False
         else:
-            all_embeddings = self.encode_all_clip() if self.is_clip else self.encode_all()
-            if self.save_embedding:
-                self._save_embedding(all_embeddings)
-            del self.corpus
+            stream_mode = (not self.is_clip) and self.streaming_build and (self.faiss_type.lower() == "flat")
+            if not stream_mode:
+                all_embeddings = self.encode_all_clip() if self.is_clip else self.encode_all()
+                if self.save_embedding:
+                    self._save_embedding(all_embeddings)
+                del self.corpus
 
         # build index
         if self.is_clip:
-            if self.index_modal == "all":
-                assert all_embeddings.shape[0] % 2 == 0
-                text_embedding = all_embeddings[: len(all_embeddings) // 2, :]
-                image_embedding = all_embeddings[len(all_embeddings) // 2:, :]
-                text_index_save_path = os.path.join(
-                    self.save_dir, f"{self.retrieval_method}_{self.faiss_type}_text.index"
-                )
-                self.save_faiss_index(text_embedding, self.faiss_type, text_index_save_path)
+            # CLIP 路径仍使用一次性写入
+            if self.embedding_path is not None or not stream_mode:
+                if self.index_modal == "all":
+                    assert all_embeddings.shape[0] % 2 == 0
+                    text_embedding = all_embeddings[: len(all_embeddings) // 2, :]
+                    image_embedding = all_embeddings[len(all_embeddings) // 2:, :]
+                    text_index_save_path = os.path.join(
+                        self.save_dir, f"{self.retrieval_method}_{self.faiss_type}_text.index"
+                    )
+                    self.save_faiss_index(text_embedding, self.faiss_type, text_index_save_path)
 
-                image_index_save_path = os.path.join(
-                    self.save_dir, f"{self.retrieval_method}_{self.faiss_type}_image.index"
-                )
-                self.save_faiss_index(image_embedding, self.faiss_type, image_index_save_path)
-            else:
-                self.index_save_path = os.path.join(
-                    self.save_dir, f"{self.retrieval_method}_{self.faiss_type}_{self.index_modal}.index"
-                )
-                self.save_faiss_index(all_embeddings, self.faiss_type, self.index_save_path)
-        else:
-            self.index_save_path = os.path.join(self.save_dir, f"{self.retrieval_method}_{self.faiss_type}.index")
+                    image_index_save_path = os.path.join(
+                        self.save_dir, f"{self.retrieval_method}_{self.faiss_type}_image.index"
+                    )
+                    self.save_faiss_index(image_embedding, self.faiss_type, image_index_save_path)
+                else:
+                    self.index_save_path = os.path.join(
+                        self.save_dir, f"{self.retrieval_method}_{self.faiss_type}_{self.index_modal}.index"
+                    )
+                    self.save_faiss_index(all_embeddings, self.faiss_type, self.index_save_path)
+            print("Finish!")
+            return
+
+        # 非 CLIP：根据是否流式，走不同分支
+        self.index_save_path = os.path.join(self.save_dir, f"{self.retrieval_method}_{self.faiss_type}.index")
+        if not stream_mode:
             if os.path.exists(self.index_save_path):
                 print("The index file already exists and will be overwritten.")
             self.save_faiss_index(all_embeddings, self.faiss_type, self.index_save_path)
+            print("Finish!")
+            return
+
+        # 流式构建（仅 Flat 支持）
+        print("Creating index (streaming mode)")
+        import faiss
+        dim = hidden_size
+        faiss_index = faiss.index_factory(dim, self.faiss_type, faiss.METRIC_INNER_PRODUCT)
+
+        if self.faiss_gpu:
+            co = faiss.GpuMultipleClonerOptions()
+            co.useFloat16 = True
+            co.shard = True
+            faiss_index = faiss.index_cpu_to_all_gpus(faiss_index, co)
+
+        # 多卡：与非流式保持一致（DataParallel），但仍逐批添加
+        if torch.cuda.device_count() > 1:
+            print("Use multi gpu!")
+            self.batch_size = self.batch_size * torch.cuda.device_count()
+            self.encoder.model = torch.nn.DataParallel(self.encoder.model)
+
+        # 逐批编码与添加
+        total = len(self.corpus)
+        pbar = tqdm(range(0, total, self.batch_size), desc="Encoding+Adding (stream)")
+        for i in pbar:
+            j = min(i + self.batch_size, total)
+            texts = [self.corpus[k]["contents"] for k in range(i, j)]
+            batch_emb = self.encoder.single_batch_encode(texts, is_query=False)
+            if not faiss_index.is_trained:
+                faiss_index.train(batch_emb)
+            faiss_index.add(batch_emb)
+
+        # 写盘
+        if self.faiss_gpu:
+            faiss_index = faiss.index_gpu_to_cpu(faiss_index)
+        faiss.write_index(faiss_index, self.index_save_path)
         print("Finish!")
 
     def save_faiss_index(
@@ -635,6 +684,7 @@ def main():
     parser.add_argument("--faiss_type", default=None, type=str)
     parser.add_argument("--embedding_path", default=None, type=str)
     parser.add_argument("--save_embedding", action="store_true", default=False)
+    parser.add_argument("--streaming_build", action="store_true", default=False)
     parser.add_argument("--faiss_gpu", default=False, action="store_true")
     parser.add_argument("--sentence_transformer", action="store_true", default=False)
     parser.add_argument("--bm25_backend", default="pyserini", choices=["bm25s", "pyserini"])
@@ -660,6 +710,7 @@ def main():
         max_length=args.max_length,
         batch_size=args.batch_size,
         use_fp16=args.use_fp16,
+        streaming_build=args.streaming_build,
         pooling_method=args.pooling_method,
         instruction=args.instruction,
         faiss_type=args.faiss_type,

@@ -1,0 +1,169 @@
+model2path:
+    e5: /public/huggingface-models/intfloat/e5-base-v2
+    bge: /data/tyc/models/bge-base-en-v1.5
+    contriever: facebook/contriever
+    llama2-7B-chat: meta-llama/Llama-2-7b-chat-hf
+    llama2-7B: meta-llama/Llama-2-7b-hf
+    llama2-13B: meta-llama/Llama-2-13b-hf
+    llama2-13B-chat: meta-llama/Llama-2-13b-chat-hf
+    e5-large: /data/tyc/models/e5-large-v2
+    bge-large: /data/tyc/models/bge-large-en-v1.5
+    bge-m3: /data/tyc/models/bge-m3
+    llama3-8B-instruct: /public/huggingface-models/meta-llama/Meta-Llama-3-8B-Instruct
+    qwen3-embedding-0.6B: /public/huggingface-models/Qwen/Qwen3-Embedding-0.6B
+    qwen3-embedding-4B: /public/huggingface-models/Qwen/Qwen3-Embedding-4B
+    diver-retriever-0.6B: /data/tyc/models/Diver-Retriever-0.6B
+    qwen3-8B: /public/huggingface-models/Qwen/Qwen3-8B
+model2pooling:
+    e5: mean
+    bge: cls
+    contriever: mean
+    jina: mean
+    dpr: cls
+    e5-large: mean
+    bge-large: cls
+    bge-m3: cls
+    qwen3-embedding-0.6B: lasttoken
+    qwen3-embedding-4B: lasttoken
+    diver-retriever-0.6B: lasttoken
+method2index:
+    e5: /data/tyc/FlashRAG/indexes/e5_Flat.index
+    bm25: /data/tyc/FlashRAG/indexes/bm25
+    contriever: null
+    clip:
+        text: path/to/text_index
+        image: path/to/image_index
+    e5-large: /data/tyc/FlashRAG/indexes/e5-large_Flat.index
+    bge: /data/tyc/FlashRAG/indexes/bge_Flat.index
+    bge-large: /data/tyc/FlashRAG/indexes/bge-large_Flat.index
+    bge-m3: /data/tyc/FlashRAG/indexes/bge-m3_Flat.index
+    qwen3-embedding-0.6B: /data/tyc/FlashRAG/indexes/qwen3-embedding-0.6b_Flat.index
+    qwen3-embedding-4B: /data/tyc/FlashRAG/indexes/qwen3-embedding-4b_Flat.index
+    diver-retriever-0.6B: /data/tyc/FlashRAG/indexes/diver-retriever-0.6b_Flat.index
+data_dir: /data/tyc/datasets/FlashRAG_datasets/
+save_dir: qwen3-8b-output/test/nq_2026_02_17_15_58_naive
+gpu_id: 0,1,2,3,4,5,6,7
+dataset_name: nq
+split:
+- test
+test_sample_num: null
+random_sample: false
+seed: 2024
+save_intermediate_data: true
+save_note: naive
+retrieval_method: bm25
+retrieval_model_path: bm25
+index_path: /data/tyc/FlashRAG/indexes/bm25
+multimodal_index_path_dict: null
+faiss_gpu: false
+corpus_path: /data/tyc/datasets/FlashRAG_datasets/retrieval-corpus/wiki18_100w.jsonl
+instruction: null
+retrieval_topk: 5
+retrieval_batch_size: 128
+retrieval_use_fp16: true
+retrieval_query_max_length: 128
+save_retrieval_cache: false
+use_retrieval_cache: false
+retrieval_cache_path: null
+retrieval_pooling_method: mean
+bm25_backend: bm25s
+use_sentence_transformer: false
+silent_retrieval: true
+seismic_query_cut: 10
+seismic_heap_factor: 0.8
+use_reranker: false
+rerank_model_name: null
+rerank_model_path: null
+rerank_pooling_method: null
+rerank_topk: 5
+rerank_max_length: 512
+rerank_batch_size: 256
+rerank_use_fp16: true
+use_multi_retriever: false
+multi_retriever_setting:
+    merge_method: concat
+    topk: 5
+    rerank_model_name: null
+    rerank_model_path: null
+    retriever_list:
+    -   retrieval_method: e5
+        retrieval_topk: 5
+        index_path: /data/tyc/FlashRAG/indexes/e5_Flat.index
+        retrieval_model_path: /public/huggingface-models/intfloat/e5-base-v2
+        instruction: null
+        bm25_backend: bm25s
+        use_reranker: false
+        corpus_path: null
+        use_sentence_transformer: false
+        retrieval_pooling_method: mean
+        retrieval_use_fp16: true
+        retrieval_query_max_length: 128
+        faiss_gpu: false
+        retrieval_batch_size: 128
+        rerank_model_name: null
+        rerank_model_path: null
+        retrieval_cache_path: null
+        save_retrieval_cache: false
+        use_retrieval_cache: false
+    -   retrieval_method: bm25
+        retrieval_topk: 5
+        index_path: /data/tyc/FlashRAG/indexes/bm25
+        retrieval_model_path: bm25
+        instruction: null
+        bm25_backend: bm25s
+        use_reranker: false
+        corpus_path: null
+        use_sentence_transformer: false
+        retrieval_pooling_method: mean
+        retrieval_use_fp16: true
+        retrieval_query_max_length: 128
+        faiss_gpu: false
+        retrieval_batch_size: 128
+        rerank_model_name: null
+        rerank_model_path: null
+        retrieval_cache_path: null
+        save_retrieval_cache: false
+        use_retrieval_cache: false
+framework: vllm
+generator_model: qwen3-8B
+openai_setting:
+    api_key: null
+    base_url: null
+generator_model_path: /public/huggingface-models/Qwen/Qwen3-8B
+generator_max_input_len: 2048
+generator_batch_size: 2
+generation_params:
+    max_tokens: 32
+    do_sample: false
+use_fid: false
+gpu_memory_utilization: 0.75
+metrics:
+- em
+- f1
+- acc
+- precision
+- recall
+metric_setting:
+    retrieval_recall_topk: 5
+    tokenizer_name: gpt-4
+save_metric_score: true
+refiner_name: null
+refiner_model_path: null
+refiner_topk: 5
+refiner_pooling_method: mean
+refiner_encode_max_length: 256
+refiner_max_input_length: 1024
+refiner_max_output_length: 512
+llmlingua_config:
+    rate: 0.55
+    condition_in_question: after_condition
+    reorder_context: sort
+    dynamic_context_compression_ratio: 0.3
+    condition_compare: true
+    context_budget: '+100'
+    rank_method: longllmlingua
+sc_config:
+    reduce_ratio: 0.5
+dataset_path: /data/tyc/datasets/FlashRAG_datasets/nq
+gpu_num: 8
+device: cuda
